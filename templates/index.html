@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PacketVision Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 1rem; }
+    h1 { margin-top: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
+    .card { background: #1e293b; border-radius: 12px; padding: 1rem; box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+    canvas { background: #0b1220; border-radius: 8px; }
+    ul { list-style: none; padding: 0; max-height: 360px; overflow-y: auto; }
+    li { background: #0b1220; margin-bottom: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 8px; }
+    .muted { color: #94a3b8; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>PacketVision Dashboard</h1>
+  <p class="muted">Live view of observed traffic and alerts.</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Source Hosts</h2>
+      <canvas id="srcChart" width="400" height="400"></canvas>
+    </div>
+    <div class="card">
+      <h2>Destination Hosts</h2>
+      <canvas id="dstChart" width="400" height="400"></canvas>
+    </div>
+    <div class="card">
+      <h2>Alerts</h2>
+      <ul id="alerts"></ul>
+    </div>
+  </div>
+
+  <script>
+    const srcCtx = document.getElementById('srcChart');
+    const dstCtx = document.getElementById('dstChart');
+
+    const commonConfig = {
+      type: 'doughnut',
+      data: { labels: [], datasets: [{ data: [], backgroundColor: [] }]},
+      options: { plugins: { legend: { labels: { color: '#e2e8f0' } } } }
+    };
+
+    const srcChart = new Chart(srcCtx, JSON.parse(JSON.stringify(commonConfig)));
+    const dstChart = new Chart(dstCtx, JSON.parse(JSON.stringify(commonConfig)));
+
+    function palette(count) {
+      const colors = [];
+      for (let i = 0; i < count; i++) {
+        const hue = (i * 47) % 360;
+        colors.push(`hsl(${hue}, 70%, 55%)`);
+      }
+      return colors;
+    }
+
+    async function refresh() {
+      const res = await fetch('/api/stats');
+      const data = await res.json();
+
+      srcChart.data.labels = data.sources.labels;
+      srcChart.data.datasets[0].data = data.sources.values;
+      srcChart.data.datasets[0].backgroundColor = palette(data.sources.labels.length);
+      srcChart.update();
+
+      dstChart.data.labels = data.destinations.labels;
+      dstChart.data.datasets[0].data = data.destinations.values;
+      dstChart.data.datasets[0].backgroundColor = palette(data.destinations.labels.length);
+      dstChart.update();
+
+      const alertsEl = document.getElementById('alerts');
+      alertsEl.innerHTML = '';
+      if (!data.alerts || data.alerts.length === 0) {
+        const li = document.createElement('li');
+        li.classList.add('muted');
+        li.innerText = 'No alerts yet.';
+        alertsEl.appendChild(li);
+      } else {
+        data.alerts.forEach(alert => {
+          const li = document.createElement('li');
+          li.innerText = alert;
+          alertsEl.appendChild(li);
+        });
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 1000);
+  </script>
+</body>
+</html>
