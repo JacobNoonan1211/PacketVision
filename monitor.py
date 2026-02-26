@@ -110,7 +110,7 @@ def inspect_packet(packet) -> None:
 
 def capture_packets(interface: str, stop_event: threading.Event) -> None:
     if pyshark is None:
-        register_alert("PyShark not installed; capture disabled. Set PV_DEMO=1 for demo mode.")
+        register_alert("pyshark not installed")
         return
 
     try:
@@ -119,7 +119,6 @@ def capture_packets(interface: str, stop_event: threading.Event) -> None:
         register_alert(f"Packet capture unavailable: {exc}")
         return
 
-    # PyShark sniff_continuously() isn't stop_event-aware; we check stop_event each loop.
     for packet in capture.sniff_continuously():
         if stop_event.is_set():
             break
@@ -140,36 +139,6 @@ def capture_packets(interface: str, stop_event: threading.Event) -> None:
         except Exception as exc:
             register_alert(f"Error processing packet: {exc}")
 
-
-def simulate_traffic(stop_event: threading.Event) -> None:
-    def random_ip() -> str:
-        return ".".join(str(random.randint(1, 254)) for _ in range(4))
-
-    hosts = [
-        "api.internal",
-        "db.internal",
-        "cache.internal",
-        "cdn.example.com",
-        "users.example.com",
-        "auth.example.com",
-    ]
-
-    register_alert("Demo mode enabled (synthetic traffic).")
-
-    while not stop_event.is_set():
-        src = random.choice(hosts)
-        dst = random.choice(hosts)
-        src_ip = random_ip()
-        dst_ip = random_ip()
-
-        with lock:
-            src_counter[src] += 1
-            dst_counter[dst] += 1
-
-        if random.random() < 0.05:
-            register_alert(f"Demo alert: unusual traffic {src_ip} -> {dst_ip}")
-
-        time.sleep(0.5)
 
 
 def get_stats() -> Dict:
@@ -192,15 +161,10 @@ def get_stats() -> Dict:
 
 
 def start_monitor_thread(stop_event: threading.Event) -> threading.Thread:
-    demo_mode = os.getenv("PV_DEMO", "0") == "1"
     interface = os.getenv("PV_INTERFACE", "Wi-Fi")
 
-    if demo_mode:
-        target = simulate_traffic
-        args = (stop_event,)
-    else:
-        target = capture_packets
-        args = (interface, stop_event)
+    target = capture_packets
+    args = (interface, stop_event)
 
     t = threading.Thread(target=target, args=args, daemon=True)
     t.start()
